@@ -1,3 +1,15 @@
+from keras.layers import Dense, Flatten, Conv3D, MaxPooling3D, Dropout, Multiply, Add, Concatenate
+from datetime import date, datetime
+from termcolor import colored
+from tensorflow.keras.layers import Lambda
+from keras.models import model_from_json
+from keras.models import Model
+from tensorflow.keras.layers import Input
+import tensorflow as tf
+from keras.models import load_model
+import numpy as np
+import cv2
+import os
 import warnings
 
 from Shoplifting_net import ShopliftingNet
@@ -7,256 +19,249 @@ warnings.simplefilter(action='error', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # Just disables the warning, doesn't take advantage of AVX/FMA to run faster
-import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-import cv2
-import numpy as np
-from keras.models import load_model
-#from keras.optimizers import Adam, SGD
-from datetime import date,datetime
-#from datetime import datetime
-import tensorflow as tf
-from tensorflow.keras.layers import Input
-from keras.models import Model
-from keras.models import model_from_json
-#from keras.optimizers import SGD, Adam
-from keras.layers import Dense, Flatten, Conv3D, MaxPooling3D, Dropout, Multiply,Add,Concatenate
-from tensorflow.keras.layers import Lambda
-import cv2
-import numpy as np
-import os
-#from moviepy.editor import *
+# from keras.optimizers import Adam, SGD
+# from datetime import datetime
+# from keras.optimizers import SGD, Adam
+# from moviepy.editor import *
 
-import warnings
-
-from termcolor import colored
 
 warnings.filterwarnings("ignore")
+
 
 class Shoplifting_Live():
 
     def __init__(self):
-        #shoplifting_weight_path = r"E:\FINAL_PROJECT_DATA\2021\Shoplifting_detection\Shoplifting\weight_steals\GATE_FLOW_SLOW_FAST_RGB_ONLY\weights_at_epoch_5_rgb_72ACC_THE_BAST.h5"
-        # shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_8_75___good.h5"
-        shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_5_rgb_72ACC_THE_BAST.h5"
-        # shoplifting_weight_path = r"/Users/pornprasithmahasith/Documents/workspace/Shoplifting-Detection/CODE/weight_steals/GATE_FLOW_SLOW_FAST/weights_at_epoch_shoplifting_net_model.h5"
-        #r"weights_at_epoch_1_new_train.h5"
+        # shoplifting_weight_path = r"E:\FINAL_PROJECT_DATA\2021\Shoplifting_detection\Shoplifting\weight_steals\GATE_FLOW_SLOW_FAST_RGB_ONLY\weights_at_epoch_5_rgb_72ACC_THE_BAST.h5"
+        # shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_5__best_67.h5"
+        shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_8_75___good.h5"
+        # shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_5_rgb_72ACC_THE_BAST.h5"
+        # shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST/weights_at_epoch_shoplifting_net_model.h5"
+        # r"weights_at_epoch_1_new_train.h5"
         self.weight_path_Shoplifting = shoplifting_weight_path
         self.ShopliftingNet_RGB = ShopliftingNet(shoplifting_weight_path)
         self.shoplifting_model = None
-        self.ShopliftingNet_RGB_model = None
         self.frames = None
         self.test_index = 0
 
-        #self.build_abuse_AND_fall_models()
+        # self.build_abuse_AND_fall_models()
     #
     def get_rgb(self, input_x):
         rgb = input_x[..., :3]
         return rgb
     # # extract the optical flows
+
     def get_opt(self, input_x):
         opt = input_x[..., 3:5]
         return opt
     # # extract slow fast input
+
     def data_layer(self, input, stride):
         return tf.gather(input, tf.range(0, 64, stride), axis=1)
+
     def sample(self, input, stride):
         return tf.gather(input, tf.range(0, input.shape[1], stride), axis=1)
+
     def temporalPooling(self, fast_opt, fast_rgb):
         fast_temoral_poll = Multiply()([fast_rgb, fast_opt])
-        fast_temoral_poll = MaxPooling3D(pool_size=(8, 1, 1))(fast_temoral_poll)
+        fast_temoral_poll = MaxPooling3D(
+            pool_size=(8, 1, 1))(fast_temoral_poll)
         return fast_temoral_poll
+
     def merging_block(self, x):
         x = Conv3D(
             64, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = Conv3D(
             64, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = MaxPooling3D(pool_size=(2, 2, 2))(x)
-    
+
         x = Conv3D(
             64, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = Conv3D(
             64, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = MaxPooling3D(pool_size=(2, 2, 2))(x)
-    
+
         x = Conv3D(
             128, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = Conv3D(
             128, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = MaxPooling3D(pool_size=(2, 3, 3))(x)
         return x
-    
+
     def get_Flow_gate_fast_path(self, fast_input):
         inputs = fast_input
-    
+
         connection_dic = {}
-    
+
         rgb = Lambda(self.get_rgb, output_shape=None)(inputs)
-    
+
         opt = Lambda(self.get_opt, output_shape=None)(inputs)
-    
-        ##################################################### RGB channel
+
+        # RGB channel
         # 1
         rgb = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = Conv3D(
             16, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         rgb = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = Conv3D(
             16, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
         # con1
         # print(f"fast con_1-{rgb.shape}")
-        lateral = Lambda(self.sample, arguments={'stride': 18}, name="con_1")(rgb)
+        lateral = Lambda(self.sample, arguments={
+                         'stride': 18}, name="con_1")(rgb)
         connection_dic.update({"con-1": lateral})
-    
+
         # 2
-    
+
         rgb = Conv3D(
             32, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = Conv3D(
             32, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         rgb = Conv3D(
             32, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
         rgb = Conv3D(
             32, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         # print(f"fast con_2-{rgb.shape}")
         # connection_dic.update({"con-2": rgb})
-        lateral = Lambda(self.sample, arguments={'stride': 18}, name="con_2")(rgb)
+        lateral = Lambda(self.sample, arguments={
+                         'stride': 18}, name="con_2")(rgb)
         connection_dic.update({"con-2": lateral})
-    
+
         # 3
-    
-        ##################################################### Optical Flow channel
+
+        # Optical Flow channel
         opt = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(opt)
-    
+
         opt = Conv3D(
             16, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(opt)
-    
+
         opt = MaxPooling3D(pool_size=(1, 2, 2))(opt)
-    
+
         opt = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(opt)
-    
+
         opt = Conv3D(
             16, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(opt)
-    
+
         opt = MaxPooling3D(pool_size=(1, 2, 2))(opt)
-    
+
         opt = Conv3D(
             32, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(opt)
-    
+
         opt = Conv3D(
             32, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(opt)
-    
+
         opt = MaxPooling3D(pool_size=(1, 2, 2))(opt)
-    
+
         opt = Conv3D(
             32, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='sigmoid',
             padding='same')(opt)
-    
+
         opt = Conv3D(
             32, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='sigmoid',
             padding='same')(opt)
-    
+
         opt = MaxPooling3D(pool_size=(1, 2, 2))(opt)
-    
+
         return rgb, opt, connection_dic
+
     def get_Flow_gate_slow_path(self, slow_input, connection_dic):
         # inputs = Input(shape=(64, 224, 224, 5))
         inputs = slow_input
         rgb = Lambda(self.get_rgb, output_shape=None)(inputs)
-    
+
         con_1 = connection_dic.get('con-1')
         con_2 = connection_dic.get('con-2')
-    
-        ##################################################### RGB channel
+
+        # RGB channel
         rgb = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = Conv3D(
             16, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         rgb = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = Conv3D(
             16, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         # con1
         # print(f"slow con_1-{rgb.shape}")
         # print(f"con-1 from fast {connection_dic.get('con-1')}")
-    
+
         ans1 = Add(name="connection_1_rgb")([rgb, con_1])
-    
+
         rgb = Conv3D(
             32, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(ans1)
-    
+
         rgb = Conv3D(
             32, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         rgb = Conv3D(
             32, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
         rgb = Conv3D(
             32, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
-    
+
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
-    
+
         # con2
         # print(f"slow con_2-{rgb.shape}")
         # print(f"con-2 from fast {connection_dic.get('con-2').shape}")
@@ -275,88 +280,93 @@ class Shoplifting_Live():
         x = MaxPooling3D(pool_size=(1, 2, 2))(x)
         # print(x.shape)
         # x = MaxPooling3D(pool_size=(8, 1, 1))(x)
-    
+
         # x=ans2
-        ##################################################### Merging Block
+        # Merging Block
         x = Conv3D(
             64, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = Conv3D(
             64, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = MaxPooling3D(pool_size=(2, 2, 2))(x)
-    
+
         x = Conv3D(
             64, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = Conv3D(
             64, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = MaxPooling3D(pool_size=(2, 2, 2))(x)
         # print(f"hereeeeeee {x.shape}")
-    
+
         x = Conv3D(
             128, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         x = Conv3D(
             128, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
-    
+
         # print(x.shape)
         # x = MaxPooling3D(pool_size=(2, 3, 3))(x)
-    
+
         # x = MaxPooling3D(pool_size=(2, 2, 2))(x)
         # print(f"--final{x.shape}")
-    
+
         return x
+
     def gate_flow_slow_fast_network_builder(self):
         clip_shape = [64, 224, 224, 3]
         tau = 16
         clip_input = Input(shape=clip_shape)
-    
-        slow_input = Lambda(self.data_layer, arguments={'stride': tau}, name='slow_input')(clip_input)
+
+        slow_input = Lambda(self.data_layer, arguments={
+                            'stride': tau}, name='slow_input')(clip_input)
         # print(slow_input.shape)
-    
+
         # fast_input = Lambda(data_layer, arguments={'stride': int(tau / alpha)}, name='fast_input')(clip_input)
         fast_input = clip_input
-    
+
         # build fast path networks
-        fast_rgb, fast_opt, connection = self.get_Flow_gate_fast_path(fast_input)
-    
+        fast_rgb, fast_opt, connection = self.get_Flow_gate_fast_path(
+            fast_input)
+
         # get slow network
-    
+
         slow_rgb = self.get_Flow_gate_slow_path(slow_input, connection)
-    
+
         # temporal Pooling
         fast_res_temporal_Pooling = self.temporalPooling(fast_opt, fast_rgb)
         # print(f"res-temporalPooling {fast_res_temporal_Pooling.shape}")
-    
+
         # merging block
         merging_block_fast_res = self.merging_block(fast_res_temporal_Pooling)
         # print("Exit")
-    
+
         # print(merging_block_fast_res.shape)
         # print(f"slow_rgb-{slow_rgb.shape}")
         # conact slow_rgb with merging_block_fast_res
-        x = Add(name="ADD_slow_rgb_ans_fast_rgb_opt")([merging_block_fast_res, slow_rgb])
-    
-        ##########FC layer#########################################
+        x = Add(name="ADD_slow_rgb_ans_fast_rgb_opt")(
+            [merging_block_fast_res, slow_rgb])
+
+        ########## FC layer#########################################
         x = Flatten()(x)
         x = Dense(128, activation='relu')(x)
         # x = Dropout(0.2)(x)
         x = Dense(32, activation='relu')(x)
-    
+
         # Build the model
-        #TODO CHANGE DENSE LAYER TO 3
+        # TODO CHANGE DENSE LAYER TO 3
         pred = Dense(3, activation='softmax')(x)
         model = Model(inputs=clip_input, outputs=pred)
         return model
     # # build model
+
     def get_gate_flow_slow_fast_model(self):
         """
         build gate_flow_slow_fast without weight_steals
@@ -365,14 +375,16 @@ class Shoplifting_Live():
         model = self.gate_flow_slow_fast_network_builder()
         return model
     # #build_abuse_AND_fall_models+weight_steals
+
     def build_shoplifting_net_models(self):
         self.shoplifting_model = self.get_gate_flow_slow_fast_model()
-        
+
         print("[+][+]download Shoplifting model and weight_steals")
         print(self.weight_path_Shoplifting)
         self.shoplifting_model.load_weights(self.weight_path_Shoplifting)
     #
     # #
+
     def get_new_model_shoplifting_net(self):
         self.shoplifting_model = self.ShopliftingNet_RGB.load_model_and_weight()
     #
@@ -391,8 +403,6 @@ class Shoplifting_Live():
     #     #print("Loaded EMS model,weight_steals from disk")
 
     ###
-
-
 
     # def getOpticalFlow(self,frames):
     #     """Calculate dense optical flow of input video
@@ -428,7 +438,7 @@ class Shoplifting_Live():
     #     # return np.array(flows, dtype=np.float32)
     #     return np.array(flows)
 
-    def uniform_sampling(self,np_video_frame, target_frames=64):
+    def uniform_sampling(self, np_video_frame, target_frames=64):
         # get total frames of input video and calculate sampling interval
         len_frames = int(len(np_video_frame))
         interval = int(np.ceil(len_frames / target_frames))
@@ -460,7 +470,7 @@ class Shoplifting_Live():
             # exit()
         return np.array(sampled_video, dtype=np.float32)
 
-    def normalize(self,data):
+    def normalize(self, data):
         mean = np.mean(data)
         std = np.std(data)
         return (data - mean) / std
@@ -480,7 +490,8 @@ class Shoplifting_Live():
             frame = np.reshape(frame, (224, 224, 3))
             frame_set.append(frame)
         return np.array(frame_set)
-    def make_frame_format(self,frame,resize=(224,224)):
+
+    def make_frame_format(self, frame, resize=(224, 224)):
         """
         :param frame:
         :return:frame format that sout the model input
@@ -491,30 +502,31 @@ class Shoplifting_Live():
         return frame
     #
     # # step2 get optical flow of the frame
-    def frame_preprocessing(self,frames):
+
+    def frame_preprocessing(self, frames):
         """
         get the optical flow and uniform_sampling and normalize
         :param frames: list of frames in size (149,224,224,5)
         :return: np array to predction in size(-1,64,224,224,5)
         """
-        #frames = np.array(self.frames)
+        # frames = np.array(self.frames)
         # get the optical flow
-        #flows = self.getOpticalFlow(frames)
+        # flows = self.getOpticalFlow(frames)
         # len_flow size is 149
-        #result = np.zeros((len(flows), 224, 224, 5))
+        # result = np.zeros((len(flows), 224, 224, 5))
         result = frames
-        #result[..., 3:] = flows
-    
+        # result[..., 3:] = flows
+
         # unifrom sampling return np array(49,224,224,5)
         result = self.uniform_sampling(np_video_frame=result, target_frames=64)
-    
+
         # normalize rgb images and optical flows, respectively
         result[..., :3] = self.normalize(result)
-        #result[..., 3:] = self.normalize(result[..., 3:])
-    
+        # result[..., 3:] = self.normalize(result[..., 3:])
+
         result = result.reshape((-1, 64, 224, 224, 3))
         return result
-    
+
     # # step3 make predecion on the frame after preproccisng
     # def frame_prediction(self, frame_pred):
     #     predictions = self.shoplifting_model.predict(frame_pred)
@@ -581,53 +593,52 @@ class Shoplifting_Live():
         Bag = Bag.item()
         Clotes = Clotes.item()
         Normal = Normal.item()
-        #print(round(Bag, 3), round(Clotes, 3), round(Normal, 3))
+        # print(round(Bag, 3), round(Clotes, 3), round(Normal, 3))
         return [round(Bag, 3), round(Clotes, 3), round(Normal, 3)]
 
-    def help_func_pred(self,pred):
+    def help_func_pred(self, pred):
         # return state report [event,not_event,status]
         Bag = pred[0]
         Clotes = pred[1]
-        Normal =pred[2]
-
+        Normal = pred[2]
 
         if (Normal < Bag and Normal < Clotes):
-            if (Bag>Clotes):
+            if (Bag > Clotes):
                 index = 0
             else:
-                index  =1
+                index = 1
 
             return [Bag, Clotes, Normal, True, index]
         else:
-            index  = 2
-            return [Bag, Clotes, Normal, False,index]
+            index = 2
+            return [Bag, Clotes, Normal, False, index]
 
     def save_frame_set_after_pred_live_demo(self, EMS_event_path, EMS_event_frame_set, index, pred, flag, w, h):
 
-        #FOR SIMCAM 1
+        # FOR SIMCAM 1
         file_name = "EMS_event_record_" + str(index) + "__.mp4"
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
 
-        #2
+        # 2
         # file_name = "Shoplifting_event_record_" + str(index) + "__.avi"
         # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
 
-        #3
+        # 3
         # fourcc = cv2.VideoWriter_fourcc(*'X264')
         # file_name = "EMS_event_record_" + str(index) + "__.mp4"
 
         video_dst_path = os.path.join(EMS_event_path, file_name)
         # print(f"Final path = {video_dst_path}\nindex = {index}\n")
 
-
         out = cv2.VideoWriter(video_dst_path, fourcc, 15, (w, h))
 
         for frame in EMS_event_frame_set:
-            cv2.putText(frame, "Theft alert ", (int(20), int(80)), 0, 5e-3 * 200, (0, 255, 0),3)
+            cv2.putText(frame, "Theft alert ", (int(20), int(80)),
+                        0, 5e-3 * 200, (0, 255, 0), 3)
             cv2.putText(frame, "Bag: %" + str(round(pred[0] * 100, 4)), (int(20), int(120)), 0, 5e-3 * 200,
                         (0, 255, 0), 3)
-            #220, 20, 60 #(0, 255, 0), 3)
-            #Hides an item
+            # 220, 20, 60 #(0, 255, 0), 3)
+            # Hides an item
             cv2.putText(frame, "Clothes: %" + str(round(pred[1] * 100, 4)), (int(20), int(160)), 0, 5e-3 * 200,
                         (0, 255, 0), 3)
 
@@ -672,7 +683,6 @@ class Shoplifting_Live():
         """
         ############
 
-
         # print(len(frame_set_format_r))
         # print(type(frame_set_format_r))
         # print(len(frame_set_r))
@@ -707,7 +717,7 @@ class Shoplifting_Live():
             reports_3 = reports_2
 
         # print(f"s_1-{len(s_1)}\ns_2-{len(s_2)}\ns_3-{len(s_3)}\n")
-        #print(f"reports:1-{reports_1}\nreports:2-{reports_2}\nreports:3-{reports_3} ")
+        # print(f"reports:1-{reports_1}\nreports:2-{reports_2}\nreports:3-{reports_3} ")
 
         # case found abuse event in one of the samples
         if (reports_1[2] == True or reports_2[2] == True or reports_3[2] == True):
@@ -716,9 +726,9 @@ class Shoplifting_Live():
             arr_min = [reports_1[1], reports_2[1], reports_3[1]]
             max = np.max(arr_max)
             min = np.min(arr_min)
-            reports = [max,min,True]
-            print(colored(f"reports {max,min}",'green'))
-            #return [arr_max,arr_min,True]
+            reports = [max, min, True]
+            print(colored(f"reports {max,min}", 'green'))
+            # return [arr_max,arr_min,True]
             # print(f"Max_res={max}")
             # if reports_1[2]:
             #     reports = reports_1
@@ -734,29 +744,29 @@ class Shoplifting_Live():
 
         return reports
 
-    def split_frame_set(self,frame_set_format):
+    def split_frame_set(self, frame_set_format):
         """
         return list of frame set 64 frame each
         :param frame_set_format_r:
         :return: list[s1,s2,s3..]
         """
         iter = np.ceil(len(frame_set_format)/64)
-        #print(iter)
+        # print(iter)
         set_list = []
         index = 0
         start = 0
         end = 64
 
-        while iter>=0:
+        while iter >= 0:
             s = frame_set_format[start:end]
-            #print(f"iter= {iter}\nlen(s)= {len(s)}")
+            # print(f"iter= {iter}\nlen(s)= {len(s)}")
             set_list.append(s.copy())
             start = start + 32
-            end = end +32
+            end = end + 32
             iter = iter - 1
 
-        #print(f"set list len = {len(set_list)}")
-        #print("start = {} end = {}".format(start,end))
+        # print(f"set list len = {len(set_list)}")
+        # print("start = {} end = {}".format(start,end))
         return set_list
 
     def split_frame_set_Recursive(self, frame_set_format):
@@ -786,8 +796,7 @@ class Shoplifting_Live():
         print("start = {} end = {}".format(start, end))
         return set_list
 
-    def check_score(self,report):
-
+    def check_score(self, report):
         print("in check_score, report = {}".format(report))
         if report[4] == 0:
             self.Bag_count = self.Bag_count + 1
@@ -812,28 +821,21 @@ class Shoplifting_Live():
         """
         ############
 
-
-
         res = self.split_frame_set(frame_set_format_r)
-        reports = [0,0,0,False,None]
+        reports = [0, 0, 0, False, None]
         self.Bag_count = 0
         self.Clotes_count = 0
         self.Normal_count = 0
         for f_set in res:
-            reports = self.run_ShopLifting_frames_check(f_set, Shoplifting_flag)
+            reports = self.run_ShopLifting_frames_check(
+                f_set, Shoplifting_flag)
             self.check_score(reports)
-            #print("Bag_count={}\nClotes_count={}\nNormal_count={}".format(self.Bag_count,self.Clotes_count,self.Normal_count ))
+            # print("Bag_count={}\nClotes_count={}\nNormal_count={}".format(self.Bag_count,self.Clotes_count,self.Normal_count ))
             # if (reports[3]):
             #     return reports
 
         if self.Normal_count <= self.Clotes_count and self.Normal_count <= self.Bag_count:
             print("Bag_count={}\nClotes_count={}\nNormal_count={}".format(self.Bag_count, self.Clotes_count,
-                                                                            self.Normal_count))
+                                                                          self.Normal_count))
            # return reports
         return reports
-
-
-
-
-
-

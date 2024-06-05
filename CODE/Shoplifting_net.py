@@ -1,44 +1,35 @@
+from keras.layers import Dense, Flatten, Conv3D, MaxPooling3D, Dropout, Multiply, Add, Concatenate
+from datetime import date, datetime
+from termcolor import colored
+from keras.optimizers import SGD, Adam
+from tensorflow.keras.layers import Lambda
+from keras.models import model_from_json
+from keras.models import Model
+from tensorflow.keras.layers import Input
+import tensorflow as tf
+from tensorflow.python.keras import layers
+from tensorflow.python.keras import backend as K
+from keras.optimizers import Adam, SGD
+import numpy as np
+import os
+
 import warnings
 warnings.filterwarnings("ignore")
 warnings.simplefilter(action='error', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # Just disables the warning, doesn't take advantage of AVX/FMA to run faster
-import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-import cv2
-import numpy as np
-from keras.models import load_model
-from keras.optimizers import Adam, SGD
-from datetime import date,datetime
-#from datetime import datetime
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras import layers
-from keras.models import load_model
-import tensorflow as tf
-from tensorflow.keras.layers import Input
-from keras.models import Model
-from keras.models import model_from_json
-#from keras.optimizers import SGD, Adam
-from keras.layers import Dense, Flatten, Conv3D, MaxPooling3D, Dropout, Multiply,Add,Concatenate
-#from keras.layers.core import Lambda
-from tensorflow.keras.layers import Lambda
-from keras.optimizers import SGD, Adam
-import cv2
-import numpy as np
-import os
-#from moviepy.editor import *
+# from moviepy.editor import *
 
-import warnings
-
-from termcolor import colored
 
 warnings.filterwarnings("ignore")
 
+
 class ShopliftingNet:
 
-    def __init__(self,weights_path):
-        self.weights_path =weights_path
+    def __init__(self, weights_path):
+        self.weights_path = weights_path
 
     def get_rgb(self, input_x):
         rgb = input_x[..., :3]
@@ -53,16 +44,14 @@ class ShopliftingNet:
     def data_layer(self, input, stride):
         return tf.gather(input, tf.range(0, 64, stride), axis=1)
 
-
     def sample(self, input, stride):
         return tf.gather(input, tf.range(0, input.shape[1], stride), axis=1)
 
-
     def temporalPooling(self, fast_opt, fast_rgb):
         fast_temoral_poll = Multiply()([fast_rgb, fast_opt])
-        fast_temoral_poll = MaxPooling3D(pool_size=(8, 1, 1))(fast_temoral_poll)
+        fast_temoral_poll = MaxPooling3D(
+            pool_size=(8, 1, 1))(fast_temoral_poll)
         return fast_temoral_poll
-
 
     def merging_block(self, x):
         x = Conv3D(
@@ -96,15 +85,15 @@ class ShopliftingNet:
         x = MaxPooling3D(pool_size=(2, 3, 3))(x)
         return x
 
-
     def get_Flow_gate_fast_path(self, fast_input):
+        print(colored('get_Flow_gate_fast_path', 'yellow'))
         inputs = fast_input
 
         connection_dic = {}
 
         rgb = Lambda(self.get_rgb, output_shape=None)(inputs)
 
-        ##################################################### RGB channel
+        # RGB channel
         # 1
         rgb = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
@@ -127,7 +116,8 @@ class ShopliftingNet:
         rgb = MaxPooling3D(pool_size=(1, 2, 2))(rgb)
         # con1
         # print(f"fast con_1-{rgb.shape}")
-        lateral = Lambda(self.sample, arguments={'stride': 18}, name="con_1")(rgb)
+        lateral = Lambda(self.sample, arguments={
+                         'stride': 18}, name="con_1")(rgb)
         connection_dic.update({"con-1": lateral})
 
         # 2
@@ -153,23 +143,24 @@ class ShopliftingNet:
 
         # print(f"fast con_2-{rgb.shape}")
         # connection_dic.update({"con-2": rgb})
-        lateral = Lambda(self.sample, arguments={'stride': 18}, name="con_2")(rgb)
+        lateral = Lambda(self.sample, arguments={
+                         'stride': 18}, name="con_2")(rgb)
         connection_dic.update({"con-2": lateral})
 
         # 3
 
         return rgb,  connection_dic
 
-
     def get_Flow_gate_slow_path(self, slow_input, connection_dic):
+        print(colored('get_Flow_gate_slow_path', 'yellow'))
         # inputs = Input(shape=(64, 224, 224, 5))
         inputs = slow_input
         rgb = Lambda(self.get_rgb, output_shape=None)(inputs)
-        #print(f"len ={connection_dic.items()}")
+        # print(f"len ={connection_dic.items()}")
         con_1 = connection_dic.get('con-1')
         con_2 = connection_dic.get('con-2')
 
-        ##################################################### RGB channel
+        # RGB channel
         rgb = Conv3D(
             16, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(rgb)
@@ -235,7 +226,7 @@ class ShopliftingNet:
         # x = MaxPooling3D(pool_size=(8, 1, 1))(x)
 
         # x=ans2
-        ##################################################### Merging Block
+        # Merging Block
         x = Conv3D(
             64, kernel_size=(1, 3, 3), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
@@ -265,17 +256,16 @@ class ShopliftingNet:
             128, kernel_size=(3, 1, 1), strides=(1, 1, 1), kernel_initializer='he_normal', activation='relu',
             padding='same')(x)
 
-
-
         return x
 
-
     def gate_flow_slow_fast_network_builder(self):
+        print(colored('gate_flow_slow_fast_network_builder', 'yellow'))
         clip_shape = [64, 224, 224, 3]
         tau = 16
         clip_input = Input(shape=clip_shape)
 
-        slow_input = Lambda(self.data_layer, arguments={'stride': tau}, name='slow_input')(clip_input)
+        slow_input = Lambda(self.data_layer, arguments={
+                            'stride': tau}, name='slow_input')(clip_input)
         # print(slow_input.shape)
 
         # fast_input = Lambda(data_layer, arguments={'stride': int(tau / alpha)}, name='fast_input')(clip_input)
@@ -290,34 +280,36 @@ class ShopliftingNet:
 
        # print(f"[1][+][+] here\nslow_rgb {slow_rgb.shape}\nfast_rgb {fast_rgb.shape}\n")
         # temporal Pooling
-        #fast_res_temporal_Pooling = self.temporalPooling(fast_opt, fast_rgb)
+        # fast_res_temporal_Pooling = self.temporalPooling(fast_opt, fast_rgb)
         # print(f"res-temporalPooling {fast_res_temporal_Pooling.shape}")
 
         # merging block
         merging_block_fast_res = self.merging_block(fast_rgb)
-        #print(f"[2] merging_block_fast_res = {merging_block_fast_res.shape}")
-        #merging_block_fast_res = self.merging_block(fast_res_temporal_Pooling)
+        # print(f"[2] merging_block_fast_res = {merging_block_fast_res.shape}")
+        # merging_block_fast_res = self.merging_block(fast_res_temporal_Pooling)
         # print("Exit")
 
         # print(merging_block_fast_res.shape)
         # print(f"slow_rgb-{slow_rgb.shape}")
         # conact slow_rgb with merging_block_fast_res
-        x = Add(name="ADD_slow_rgb_ans_fast_rgb_opt")([merging_block_fast_res, slow_rgb])
+        x = Add(name="ADD_slow_rgb_ans_fast_rgb_opt")(
+            [merging_block_fast_res, slow_rgb])
 
-        #print(f"[3] model = {x.shape}")
-        ##########FC layer#########################################
+        # print(f"[3] model = {x.shape}")
+        ########## FC layer#########################################
         x = Flatten()(x)
         x = Dense(128, activation='relu')(x)
-        # x = Dropout(0.2)(x)
+        x = Dropout(0.2)(x)
         x = Dense(32, activation='relu')(x)
 
         # Build the model
         pred = Dense(3, activation='softmax')(x)
         model = Model(inputs=clip_input, outputs=pred)
+
         return model
 
-
     # build model
+
     def get_gate_flow_slow_fast_model(self):
         """
         build gate_flow_slow_fast without weight_steals
@@ -331,7 +323,3 @@ class ShopliftingNet:
         model = self.gate_flow_slow_fast_network_builder()
         model.load_weights(self.weights_path)
         return model
-
-#
-# S_net = ShopliftingNet()
-# S_net.get_gate_flow_slow_fast_model()

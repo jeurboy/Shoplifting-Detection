@@ -1,34 +1,23 @@
-import cv2
+import os
 import queue
 import time
 import threading
+import cv2
 import numpy as np
+
+from keras.models import model_from_json
 from termcolor import colored
 
 import Alert
 from data_pip_shoplifting import Shoplifting_Live
+
 import warnings
-# warnings.filterwarnings("ignore")
-# warnings.simplefilter(action='error', category=FutureWarning)
-# warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings("ignore")
+warnings.simplefilter(action='error', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # Just disables the warning, doesn't take advantage of AVX/FMA to run faster
-import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-from keras.models import load_model
-from tensorflow.keras.optimizers import Adam, SGD
-from datetime import date,datetime
-#from datetime import datetime
-import tensorflow as tf
-from keras.models import Model
-
-from tensorflow.keras.layers import Input
-from tensorflow.keras.optimizers import SGD, Adam
-from keras.layers import Dense, Flatten, Conv3D, MaxPooling3D, Dropout, Multiply,Add,Concatenate
-
-from tensorflow.keras.layers import Lambda
-from keras.models import model_from_json
 
 
 # from object_detection.utils import label_map_util
@@ -50,6 +39,7 @@ def get_abuse_model_and_weight_json():
     print("Loaded EMS model,weight_steals from disk")
     return abuse_model
 
+
 # ABUSE_MODEL = get_abuse_model_and_weight_json()
 q = queue.Queue(maxsize=3000)
 frame_set = []
@@ -61,30 +51,28 @@ lock = threading.Lock()
 Email_alert_flag = False
 email_alert = Alert.Email_Alert()
 shoplifting_SYS = Shoplifting_Live()
-W=0
-H=0
-src_main_dir_path =r"result/shoplifter"
-#src_main_dir_path = r"C:\Users\amit hayoun\Desktop\test3\3\aaa.avi"
-
+W = 0
+H = 0
+src_main_dir_path = r"result/shoplifter"
 
 
 def Receive():
-    global H,W
-    #print("start Receive")
-    #rtsp://SIMCAM:2K93AG@192.168.1.2/live
-    #video_cap_ip = 'rtsp://SIMCAM:S6BG9J@192.168.1.20/live'
-    #video_cap_ip = r'rtsp://barloupo@gmail.com:ziggy2525!@192.168.1.9:554/stream2'
-    video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/shoplifter/2024-05-14_12-30-11(test)__ใส่กางเกง.mp4"
+    global H, W
+    # print("start Receive")
+    # rtsp://SIMCAM:2K93AG@192.168.1.2/live
+    # video_cap_ip = 'rtsp://SIMCAM:S6BG9J@192.168.1.20/live'
+    # video_cap_ip = r'rtsp://barloupo@gmail.com:ziggy2525!@192.168.1.9:554/stream2'
+    video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/normal/2024-05-14_12-12-01.mp4"
     cap = cv2.VideoCapture(video_cap_ip)
     # cap.set(3, 640)
     # cap.set(4, 480)
     W = int(cap.get(3))
     H = int(cap.get(4))
-    #print("H={}\nW={}".format(H,W))
+    # print("H={}\nW={}".format(H,W))
     ret, frame = cap.read()
     print(colored(ret, 'green'))
     q.put(frame)
-    #while cap.isOpened():
+    # while cap.isOpened():
     while ret:
         ret, frame = cap.read()
         # cv2.imshow("video", frame)
@@ -92,23 +80,23 @@ def Receive():
 
 
 def Display():
-    global Frame_set_to_check,Frame_INDEX
+    global Frame_set_to_check, Frame_INDEX
     print(colored('Start Displaying', 'blue'))
 
     while True:
-        if q.empty() != True :
+        if q.empty() != True:
             frame = q.get()
             if isinstance(frame, type(None)):
                 print("[-][-] NoneType frame {}".format(type(frame)))
                 break
 
             frame_set.append(frame.copy())
-            
+
             if len(frame_set) == 149:
                 Frame_set_to_check = frame_set.copy()
 
-                #print(type(Frame_set_to_check))
-                #p3 = threading.Thread(target=Pred)
+                # print(type(Frame_set_to_check))
+                # p3 = threading.Thread(target=Pred)
                 Predict()
                 time.sleep(1)
                 frame_set.clear()
@@ -117,50 +105,53 @@ def Display():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+
 def Predict():
     global Frame_set_to_check, Frame_INDEX
-    #ems = EMS_Live()
+    # ems = EMS_Live()
     with lock:
-        #RGB + OPT NET
+        # RGB + OPT NET
         # shoplifting_SYS.build_shoplifting_net_models()
 
-        #RGB NET ONLY
+        # RGB NET ONLY
         shoplifting_SYS.get_new_model_shoplifting_net()
-        
+
         Frame_set_to_check_np = np.array(Frame_set_to_check.copy())
 
-        Frame_set = shoplifting_SYS.make_frame_set_format(Frame_set_to_check_np)
+        Frame_set = shoplifting_SYS.make_frame_set_format(
+            Frame_set_to_check_np)
 
         # reports = shoplifting_SYS.run_StealsNet_frames_check_live_demo_2_version(Frame_set, Frame_INDEX)
-        reports = shoplifting_SYS.run_Shoplifting_frames_check_live_demo_2_version(Frame_set, Frame_INDEX)
-        #print(reports)
+        reports = shoplifting_SYS.run_Shoplifting_frames_check_live_demo_2_version(
+            Frame_set, Frame_INDEX)
+        # print(reports)
         Frame_INDEX = Frame_INDEX + 1
-        ##
+
         Bag = reports[0]
         Clotes = reports[1]
         Normal = reports[2]
         state = reports[3]
-        #todo event_index maybe paas a dict
+        # todo event_index maybe paas a dict
         event_index = reports[4]
-        #print("event_index {}".format(event_index))
+        # print("event_index {}".format(event_index))
         ##
 
-
         if (state):
-            print(colored(f"---------------------", 'green'))
-            print(colored('Found shopLifting event', 'green'))
-            print(colored(f"Bag: {Bag}\nClotes: {Clotes}\nNormal: {Normal}", 'green'))
-            #print(colored(f"reports {reports[0], reports[1],reports[2]}", 'green'))
-            print(colored(f"Test number:{Frame_INDEX-1}\n---------------------\n", 'green'))
+            print(colored(f"---------------------", 'red'))
+            print(colored('Found shopLifting event', 'red'))
+            print(
+                colored(f"Bag: {Bag}\nClotes: {Clotes}\nNormal: {Normal}", 'red'))
+            # print(colored(f"reports {reports[0], reports[1],reports[2]}", 'green'))
+            print(
+                colored(f"Test number:{Frame_INDEX-1}\n---------------------\n", 'red'))
             # print("fight:{}\nnot fight:{}".format(fight,not_fight))
 
             prob = [Bag, Clotes, Normal]
 
             found_fall_video_path = shoplifting_SYS.save_frame_set_after_pred_live_demo(src_main_dir_path,
-                                                                                 Frame_set_to_check,
-                                                                                 Frame_INDEX-1, prob,
-                                                                                 0, W, H)
-
+                                                                                        Frame_set_to_check,
+                                                                                        Frame_INDEX-1, prob,
+                                                                                        0, W, H)
 
             if Email_alert_flag:
                 file_name = found_fall_video_path.split("\\")[-1]
@@ -168,23 +159,24 @@ def Predict():
                 print(f"file name: {file_name}")
                 absulutefilepath = found_fall_video_path
                 email_alert.send_email_alert(email_alert.user_email_address3, file_name,
-                                                  absulutefilepath)
+                                             absulutefilepath)
 
         else:
-            print(colored(f"---------------------", 'red'))
-            print(colored("Normal event", 'red'))
-            print(colored(f"Test number:{Frame_INDEX - 1}\n---------------------\n", 'red'))
+            print(colored(f"---------------------", 'green'))
+            print(colored("Normal event", 'green'))
+            print(
+                colored(f"Bag: {Bag}\nClotes: {Clotes}\nNormal: {Normal}", 'green'))
+            print(
+                colored(f"Test number:{Frame_INDEX - 1}\n---------------------\n", 'green'))
             Frame_set_to_check.clear()
 
-        #lock.release()
+        # lock.release()
         time.sleep(1)
-
 
 
 if __name__ == '__main__':
     p1 = threading.Thread(target=Receive)
     p2 = threading.Thread(target=Display)
-    #p3 = threading.Thread(target=Pred)
+
     p1.start()
     p2.start()
-    #p3.start()
