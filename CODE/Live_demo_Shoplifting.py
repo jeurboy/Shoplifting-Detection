@@ -53,16 +53,22 @@ email_alert = Alert.Email_Alert()
 shoplifting_SYS = Shoplifting_Live()
 W = 0
 H = 0
-src_main_dir_path = r"result/shoplifter"
+src_main_dir_path = r"result/shoplifter/"
 
 
 def Receive():
-    global H, W
+    global W, H
     # print("start Receive")
     # rtsp://SIMCAM:2K93AG@192.168.1.2/live
     # video_cap_ip = 'rtsp://SIMCAM:S6BG9J@192.168.1.20/live'
     # video_cap_ip = r'rtsp://barloupo@gmail.com:ziggy2525!@192.168.1.9:554/stream2'
-    video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/normal/2024-05-14_12-12-01.mp4"
+
+    # Normal
+    video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/normal/2024-05-14_12-37-17.mp4"
+
+    # Steal
+    # video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/train/shoplifter/2024-05-14_12-56-34_หยิบใส่เสื้อคลุม_ชั้นวาง_ซ้าย.mp4"
+
     cap = cv2.VideoCapture(video_cap_ip)
     # cap.set(3, 640)
     # cap.set(4, 480)
@@ -95,8 +101,6 @@ def Display():
             if len(frame_set) == 149:
                 Frame_set_to_check = frame_set.copy()
 
-                # print(type(Frame_set_to_check))
-                # p3 = threading.Thread(target=Pred)
                 Predict()
                 time.sleep(1)
                 frame_set.clear()
@@ -116,15 +120,16 @@ def Predict():
         # RGB NET ONLY
         shoplifting_SYS.get_new_model_shoplifting_net()
 
+        print(colored("model loaded complete", 'green'))
+
         Frame_set_to_check_np = np.array(Frame_set_to_check.copy())
 
         Frame_set = shoplifting_SYS.make_frame_set_format(
             Frame_set_to_check_np)
 
-        # reports = shoplifting_SYS.run_StealsNet_frames_check_live_demo_2_version(Frame_set, Frame_INDEX)
         reports = shoplifting_SYS.run_Shoplifting_frames_check_live_demo_2_version(
             Frame_set, Frame_INDEX)
-        # print(reports)
+
         Frame_INDEX = Frame_INDEX + 1
 
         Bag = reports[0]
@@ -137,14 +142,13 @@ def Predict():
         ##
 
         if (state):
-            print(colored(f"---------------------", 'red'))
+            print(colored("---------------------", 'red'))
             print(colored('Found shopLifting event', 'red'))
             print(
                 colored(f"Bag: {Bag}\nClotes: {Clotes}\nNormal: {Normal}", 'red'))
             # print(colored(f"reports {reports[0], reports[1],reports[2]}", 'green'))
             print(
                 colored(f"Test number:{Frame_INDEX-1}\n---------------------\n", 'red'))
-            # print("fight:{}\nnot fight:{}".format(fight,not_fight))
 
             prob = [Bag, Clotes, Normal]
 
@@ -162,7 +166,7 @@ def Predict():
                                              absulutefilepath)
 
         else:
-            print(colored(f"---------------------", 'green'))
+            print(colored("---------------------", 'green'))
             print(colored("Normal event", 'green'))
             print(
                 colored(f"Bag: {Bag}\nClotes: {Clotes}\nNormal: {Normal}", 'green'))

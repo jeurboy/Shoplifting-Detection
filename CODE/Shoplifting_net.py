@@ -86,7 +86,7 @@ class ShopliftingNet:
         return x
 
     def get_Flow_gate_fast_path(self, fast_input):
-        print(colored('get_Flow_gate_fast_path', 'yellow'))
+        # print(colored('get_Flow_gate_fast_path', 'yellow'))
         inputs = fast_input
 
         connection_dic = {}
@@ -152,7 +152,7 @@ class ShopliftingNet:
         return rgb,  connection_dic
 
     def get_Flow_gate_slow_path(self, slow_input, connection_dic):
-        print(colored('get_Flow_gate_slow_path', 'yellow'))
+        # print(colored('get_Flow_gate_slow_path', 'yellow'))
         # inputs = Input(shape=(64, 224, 224, 5))
         inputs = slow_input
         rgb = Lambda(self.get_rgb, output_shape=None)(inputs)
@@ -259,7 +259,7 @@ class ShopliftingNet:
         return x
 
     def gate_flow_slow_fast_network_builder(self):
-        print(colored('gate_flow_slow_fast_network_builder', 'yellow'))
+        # print(colored('gate_flow_slow_fast_network_builder', 'yellow'))
         clip_shape = [64, 224, 224, 3]
         tau = 16
         clip_input = Input(shape=clip_shape)
