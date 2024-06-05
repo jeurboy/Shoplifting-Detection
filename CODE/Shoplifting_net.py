@@ -16,11 +16,13 @@ from tensorflow.python.keras import backend as K
 from tensorflow.python.keras import layers
 from keras.models import load_model
 import tensorflow as tf
-from keras.models import Input, Model
+from tensorflow.keras.layers import Input
+from keras.models import Model
 from keras.models import model_from_json
 #from keras.optimizers import SGD, Adam
 from keras.layers import Dense, Flatten, Conv3D, MaxPooling3D, Dropout, Multiply,Add,Concatenate
-from keras.layers.core import Lambda
+#from keras.layers.core import Lambda
+from tensorflow.keras.layers import Lambda
 from keras.optimizers import SGD, Adam
 import cv2
 import numpy as np
@@ -332,4 +334,4 @@ class ShopliftingNet:
 
 #
 # S_net = ShopliftingNet()
-# #S_net.get_gate_flow_slow_fast_model()
+# S_net.get_gate_flow_slow_fast_model()
