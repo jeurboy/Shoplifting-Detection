@@ -63,7 +63,7 @@ email_alert = Alert.Email_Alert()
 shoplifting_SYS = Shoplifting_Live()
 W=0
 H=0
-src_main_dir_path =r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/shoplifter"
+src_main_dir_path =r"result/shoplifter"
 #src_main_dir_path = r"C:\Users\amit hayoun\Desktop\test3\3\aaa.avi"
 
 
@@ -74,7 +74,6 @@ def Receive():
     #rtsp://SIMCAM:2K93AG@192.168.1.2/live
     #video_cap_ip = 'rtsp://SIMCAM:S6BG9J@192.168.1.20/live'
     #video_cap_ip = r'rtsp://barloupo@gmail.com:ziggy2525!@192.168.1.9:554/stream2'
-    # video_cap_ip= r"E:\FINAL_PROJECT_DATA\2021\ALL_DATA_PART_2\ALL_IMPORTENT DESKTOP\DESKTOP_22_9_21\PROJECT_FILE\test_shoplifting\org_video\The Absolut Abolisher1977_.avi"
     video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/shoplifter/2024-05-14_12-30-11(test)__ใส่กางเกง.mp4"
     cap = cv2.VideoCapture(video_cap_ip)
     # cap.set(3, 640)
