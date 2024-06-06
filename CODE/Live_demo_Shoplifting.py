@@ -44,13 +44,14 @@ def get_abuse_model_and_weight_json():
 q = queue.Queue(maxsize=3000)
 frame_set = []
 
+model_type = "rgb"  # rgb / opt
 
 Frame_set_to_check = []
 Frame_INDEX = 0
 lock = threading.Lock()
 Email_alert_flag = False
 email_alert = Alert.Email_Alert()
-shoplifting_SYS = Shoplifting_Live()
+shoplifting_SYS = Shoplifting_Live(model_type=model_type)
 W = 0
 H = 0
 src_main_dir_path = r"result/shoplifter/"
@@ -58,16 +59,20 @@ src_main_dir_path = r"result/shoplifter/"
 
 def Receive():
     global W, H
+    dataset_path = "/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset"
+
     # print("start Receive")
     # rtsp://SIMCAM:2K93AG@192.168.1.2/live
     # video_cap_ip = 'rtsp://SIMCAM:S6BG9J@192.168.1.20/live'
     # video_cap_ip = r'rtsp://barloupo@gmail.com:ziggy2525!@192.168.1.9:554/stream2'
 
     # Normal
-    video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/test/normal/2024-05-14_12-37-17.mp4"
+    # video_cap_ip = dataset_path+"/test/normal/2024-05-14_12-37-17.mp4"
+    # video_cap_ip = dataset_path+"/test/normal/2024-04-03_14-40-14.mp4"  # Lotus store
+    video_cap_ip = dataset_path+"/test/normal/2024-05-13_14-57-39.mp4"  # Pop home
 
     # Steal
-    # video_cap_ip = r"/Users/pornprasithmahasith/Documents/workspace/video-classifier-cnn-lstm/dataset/train/shoplifter/2024-05-14_12-56-34_หยิบใส่เสื้อคลุม_ชั้นวาง_ซ้าย.mp4"
+    # video_cap_ip = dataset_path+"/train/shoplifter/2024-05-14_12-56-34_หยิบใส่เสื้อคลุม_ชั้นวาง_ซ้าย.mp4"
 
     cap = cv2.VideoCapture(video_cap_ip)
     # cap.set(3, 640)
@@ -76,7 +81,7 @@ def Receive():
     H = int(cap.get(4))
     # print("H={}\nW={}".format(H,W))
     ret, frame = cap.read()
-    print(colored(ret, 'green'))
+    # print(colored(ret, 'green'))
     q.put(frame)
     # while cap.isOpened():
     while ret:
@@ -114,11 +119,13 @@ def Predict():
     global Frame_set_to_check, Frame_INDEX
     # ems = EMS_Live()
     with lock:
-        # RGB + OPT NET
-        # shoplifting_SYS.build_shoplifting_net_models()
 
-        # RGB NET ONLY
-        shoplifting_SYS.get_new_model_shoplifting_net()
+        if model_type == "opt":
+            # RGB + OPT NET
+            shoplifting_SYS.build_shoplifting_net_models()
+        else:
+            # RGB NET ONLY
+            shoplifting_SYS.get_new_model_shoplifting_net()
 
         print(colored("model loaded complete", 'green'))
 

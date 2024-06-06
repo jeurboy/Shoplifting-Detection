@@ -348,6 +348,7 @@ class ShopliftingOpt:
         # TODO CHANGE DENSE LAYER TO 3
         pred = Dense(3, activation='softmax')(x)
         model = Model(inputs=clip_input, outputs=pred)
+
         return model
     # build model
 
@@ -357,6 +358,7 @@ class ShopliftingOpt:
         :return: gate_flow_slow_fast model
         """
         model = self.gate_flow_slow_fast_network_builder()
+
         return model
     # build_abuse_AND_fall_models+weight_steals
 

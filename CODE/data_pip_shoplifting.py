@@ -32,7 +32,7 @@ warnings.filterwarnings("ignore")
 
 class Shoplifting_Live():
 
-    def __init__(self):
+    def __init__(self, model_type):
         # shoplifting_weight_path = r"E:\FINAL_PROJECT_DATA\2021\Shoplifting_detection\Shoplifting\weight_steals\GATE_FLOW_SLOW_FAST_RGB_ONLY\weights_at_epoch_5_rgb_72ACC_THE_BAST.h5"
         # shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_5__best_67.h5"
         shoplifting_weight_path = r"weight_steals/GATE_FLOW_SLOW_FAST_RGB_ONLY/weights_at_epoch_8_75___good.h5"
@@ -49,6 +49,7 @@ class Shoplifting_Live():
         self.shoplifting_model = None
         self.frames = None
         self.test_index = 0
+        self.model_type = model_type
 
         # self.build_abuse_AND_fall_models()
 
@@ -95,6 +96,7 @@ class Shoplifting_Live():
             # calculate optical flow between each pair of frames
             flow = cv2.calcOpticalFlowFarneback(gray_video[i], gray_video[i + 1], None, 0.5, 3, 15, 3, 5, 1.2,
                                                 cv2.OPTFLOW_FARNEBACK_GAUSSIAN)
+
             # subtract the mean in order to eliminate the movement of camera
             flow[..., 0] -= np.mean(flow[..., 0])
             flow[..., 1] -= np.mean(flow[..., 1])
@@ -200,7 +202,7 @@ class Shoplifting_Live():
         result = result.reshape((-1, 64, 224, 224, 3))
         return result
 
-    def frame_preprocessing(self, frames):
+    def frame_preprocessing_opt(self, frames):
         """
         get the optical flow and uniform_sampling and normalize
         :param frames: list of frames in size (149,224,224,5)
@@ -209,17 +211,18 @@ class Shoplifting_Live():
         # frames = np.array(self.frames)
         # get the optical flow
         flows = self.getOpticalFlow(frames)
+        result = np.concatenate((frames, flows), axis=3)
+
         # len_flow size is 149
-        result = np.zeros((len(flows), 224, 224, 3))
+        # result = np.zeros((len(flows), 224, 224, 5))
 
         # unifrom sampling return np array(49,224,224,5)
         result = self.uniform_sampling(np_video_frame=result, target_frames=64)
 
         # normalize rgb images and optical flows, respectively
-        result[..., :3] = self.normalize(result)
-        # result[..., 3:] = self.normalize(result[..., 3:])
+        result[..., :5] = self.normalize(result)
 
-        result = result.reshape((-1, 64, 224, 224, 3))
+        result = result.reshape((-1, 64, 224, 224, 5))
         return result
 
     # # step3 make predecion on the frame after preproccisng
@@ -238,24 +241,6 @@ class Shoplifting_Live():
     #     # print("NOT FIGHT: " + "{:.2f}\n".format(not_fight))
     #     return [round(fight, 3), round(not_fight, 3)]
 
-    def ShopLifting_frame_prediction(self, frame_pred):
-        """
-        This functions get np frame set with optical flow calculate
-        and get prediction from ADS model
-        :param frame_pred:
-        :return: list  = [round(fight, 3), round(not_fight, 3)]
-        """
-        # frame_pred = frame_pred.reshape((-1, 64, 224, 224, 5))
-        # frame_pred = np.zeros((len(frame_pred), 64, 224, 224, 5))
-        predictions = self.shoplifting_model.predict(frame_pred)
-        prediction = predictions[0]
-
-        Bag = prediction[0].item()
-        Clotes = prediction[1].item()
-        Normal = prediction[2].item()
-
-        return [round(Bag, 3), round(Clotes, 3), round(Normal, 3)]
-
     def help_func_pred(self, pred):
         # return state report [event,not_event,status]
         Bag = pred[0]
@@ -273,39 +258,6 @@ class Shoplifting_Live():
             index = 2
             return [Bag, Clotes, Normal, False, index]
 
-    def save_frame_set_after_pred_live_demo(self, EMS_event_path, EMS_event_frame_set, index, pred, flag, w, h):
-
-        # FOR SIMCAM 1
-        file_name = "EMS_event_record_" + str(index) + "__.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
-
-        # 2
-        # file_name = "Shoplifting_event_record_" + str(index) + "__.avi"
-        # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-
-        # 3
-        # fourcc = cv2.VideoWriter_fourcc(*'X264')
-        # file_name = "EMS_event_record_" + str(index) + "__.mp4"
-
-        video_dst_path = os.path.join(EMS_event_path, file_name)
-        # print(f"Final path = {video_dst_path}\nindex = {index}\n")
-
-        out = cv2.VideoWriter(video_dst_path, fourcc, 15, (w, h))
-
-        for frame in EMS_event_frame_set:
-            cv2.putText(frame, "Theft alert ", (int(20), int(80)),
-                        0, 5e-3 * 200, (0, 255, 0), 3)
-            cv2.putText(frame, "Bag: %" + str(round(pred[0] * 100, 4)), (int(20), int(120)), 0, 5e-3 * 200,
-                        (0, 255, 0), 3)
-            # 220, 20, 60 #(0, 255, 0), 3)
-            # Hides an item
-            cv2.putText(frame, "Clothes: %" + str(round(pred[1] * 100, 4)), (int(20), int(160)), 0, 5e-3 * 200,
-                        (0, 255, 0), 3)
-
-            out.write(frame)
-        out.release()
-        return video_dst_path
-
     def run_ShopLifting_frames_check(self, frame_set_format_r, index):
         """
         use this function when we want to make prediction on frames set
@@ -317,17 +269,43 @@ class Shoplifting_Live():
         # todo change back to return fall model after training
         # print("##CHECK NUMBER {}\n".format(index))
         # get frame after calc optical flow
-        RES_TO_PREDICT = self.frame_preprocessing_rgb(frame_set_format_r)
+
+        if self.model_type == "opt":
+            frame_to_predict = self.frame_preprocessing_opt(frame_set_format_r)
+        else:
+            frame_to_predict = self.frame_preprocessing_rgb(frame_set_format_r)
+
         # get model prediction
         # ABUSE
-        shopLifting_pred = self.ShopLifting_frame_prediction(RES_TO_PREDICT)
+        shoplifting_pred = self.ShopLifting_frame_prediction(frame_to_predict)
+
         # FALL
         # fall_pred = self.fall_frame_prediction(RES_TO_PREDICT)
 
-        shopLifting_res = self.help_func_pred(shopLifting_pred)
+        shopLifting_res = self.help_func_pred(shoplifting_pred)
         # fall_res = self.help_func_pred(fall_pred)
         # TODO RETURN THE BIGEST PRED BETWEEN ABUSE AND FALL
         return shopLifting_res
+
+    def ShopLifting_frame_prediction(self, frame_pred):
+        """
+        This functions get np frame set with optical flow calculate
+        and get prediction from ADS model
+        :param frame_pred:
+        :return: list  = [round(fight, 3), round(not_fight, 3)]
+        """
+        # print(frame_pred.shape)
+        # if self.model_type == "opt":
+        #     np.reshape(frame_pred, (1, 64, 224, 224, 5))
+        # frame_pred = np.zeros((len(frame_pred), 64, 224, 224, 5))
+        predictions = self.shoplifting_model.predict(frame_pred)
+        prediction = predictions[0]
+
+        Bag = prediction[0].item()
+        Clotes = prediction[1].item()
+        Normal = prediction[2].item()
+
+        return [round(Bag, 3), round(Clotes, 3), round(Normal, 3)]
 
     def split_frame_set(self, frame_set_format):
         """
@@ -400,3 +378,35 @@ class Shoplifting_Live():
 
                 return reports
         return [0, 0, 0, False, None]
+
+    def save_frame_set_after_pred_live_demo(self, EMS_event_path, EMS_event_frame_set, index, pred, flag, w, h):
+        # FOR SIMCAM 1
+        file_name = "EMS_event_record_" + str(index) + "__.mp4"
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+
+        # 2
+        # file_name = "Shoplifting_event_record_" + str(index) + "__.avi"
+        # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+
+        # 3
+        # fourcc = cv2.VideoWriter_fourcc(*'X264')
+        # file_name = "EMS_event_record_" + str(index) + "__.mp4"
+
+        video_dst_path = os.path.join(EMS_event_path, file_name)
+        # print(f"Final path = {video_dst_path}\nindex = {index}\n")
+
+        out = cv2.VideoWriter(video_dst_path, fourcc, 15, (w, h))
+
+        for frame in EMS_event_frame_set:
+            cv2.putText(frame, "Theft alert ", (int(20), int(80)),
+                        0, 5e-3 * 200, (0, 255, 0), 3)
+            cv2.putText(frame, "Bag: %" + str(round(pred[0] * 100, 4)), (int(20), int(120)), 0, 5e-3 * 200,
+                        (0, 255, 0), 3)
+            # 220, 20, 60 #(0, 255, 0), 3)
+            # Hides an item
+            cv2.putText(frame, "Clothes: %" + str(round(pred[1] * 100, 4)), (int(20), int(160)), 0, 5e-3 * 200,
+                        (0, 255, 0), 3)
+
+            out.write(frame)
+        out.release()
+        return video_dst_path
